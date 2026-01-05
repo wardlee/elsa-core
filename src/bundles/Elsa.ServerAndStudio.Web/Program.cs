@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 const bool useMassTransit = true;
 const bool useProtoActor = false;
 const bool useCaching = true;
-const bool useMySql = false;
+const bool useMySql = true;
 const DistributedCachingTransport distributedCachingTransport = DistributedCachingTransport.MassTransit;
 const MassTransitBroker useMassTransitBroker = MassTransitBroker.Memory;
 
