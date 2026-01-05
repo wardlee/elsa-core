@@ -10,6 +10,9 @@ using Medallion.Threading.FileSystem;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Proto.Persistence.Sqlite;
+using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Stores;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 const bool useMassTransit = true;
 const bool useProtoActor = false;
@@ -141,6 +144,10 @@ services
             });
         }
     });
+
+// 去除工作流执行日志存储和活动执行存储的实现，以禁用这些功能。
+services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutionLogStore, NoopWorkflowExecutionLogStore>());
+services.Replace(ServiceDescriptor.Scoped<IActivityExecutionStore, NoopActivityExecutionStore>());
 
 services.AddHealthChecks();
 
