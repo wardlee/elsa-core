@@ -3,7 +3,6 @@ using Elsa.Common.Entities;
 using Elsa.Common.Models;
 using Elsa.EntityFrameworkCore.Common.Contracts;
 using Elsa.EntityFrameworkCore.Extensions;
-using Elsa.Extensions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore;
 using Open.Linq.AsyncExtensions;
@@ -301,40 +300,14 @@ public class Store<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextF
     }
 
     /// <summary>
-    /// Deletes entities matching a predicate.
+    /// Deletes entities using a predicate.
     /// </summary>
-    /// <param name="predicate">The predicate.</param>
-    /// <param name="pageArgs">The page arguments.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The number of deleted entities.</returns>
-    public async Task<long> DeleteWhereAsync(Expression<Func<TEntity, bool>> predicate, PageArgs? pageArgs = default, CancellationToken cancellationToken = default)
+    /// <returns>The number of entities deleted.</returns>
+    public async Task<long> DeleteWhereAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await CreateDbContextAsync(cancellationToken);
-        var set = dbContext.Set<TEntity>();
-
-        // 1. 如果没有分页参数，直接使用高效的批量删除 (ExecuteDeleteAsync)
-        if (pageArgs == null)
-        {
-            return await set.Where(predicate).ExecuteDeleteAsync(cancellationToken);
-        }
-
-        // 2. 如果有分页参数 (MySQL 兼容性修复)
-        // MySQL 不支持 DELETE FROM Table WHERE Id IN (SELECT Id FROM Table ... LIMIT x)
-        var entities = await set
-            .Where(predicate)
-            .Paginate(pageArgs)
-            .ToListAsync(cancellationToken);
-
-        if (entities.Count == 0)
-        {
-            return 0;
-        }
-
-        // 3. 在内存中标记删除并提交
-        set.RemoveRange(entities);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return entities.Count;
+        var set = dbContext.Set<TEntity>().AsNoTracking();
+        return await set.Where(predicate).ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <summary>
@@ -344,23 +317,9 @@ public class Store<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextF
     public async Task<long> DeleteWhereAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await CreateDbContextAsync(cancellationToken);
-        var set = dbContext.Set<TEntity>();
-
-        // 应用传入的查询逻辑（可能包含 Where 和 Take/Skip）
-        var queryable = query(set);
-
-        var entities = await queryable.ToListAsync(cancellationToken);
-
-        if (entities.Count == 0)
-        {
-            return 0;
-        }
-
-        // 使用 RemoveRange 在内存中标记删除，EF Core 会生成标准的 DELETE FROM table WHERE Id IN (...) 语句
-        dbContext.RemoveRange(entities);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return entities.Count;
+        var set = dbContext.Set<TEntity>().AsNoTracking();
+        var queryable = query(set.AsQueryable());
+        return await queryable.ExecuteDeleteAsync(cancellationToken);
     }
 
     /// <summary>
