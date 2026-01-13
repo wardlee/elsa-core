@@ -3,6 +3,7 @@ using Elsa.Common.Entities;
 using Elsa.Common.Models;
 using Elsa.EntityFrameworkCore.Common.Contracts;
 using Elsa.EntityFrameworkCore.Extensions;
+using Elsa.Extensions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore;
 using Open.Linq.AsyncExtensions;
@@ -50,7 +51,7 @@ public class Store<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextF
 
         if (onAdding != null)
             await onAdding(dbContext, entity, cancellationToken);
-                
+
         var set = dbContext.Set<TEntity>();
         await set.AddAsync(entity, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -67,7 +68,7 @@ public class Store<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextF
     {
         await AddManyAsync(entities, null, cancellationToken);
     }
-    
+
     /// <summary>
     /// Adds the specified entities.
     /// </summary>
@@ -317,9 +318,23 @@ public class Store<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextF
     public async Task<long> DeleteWhereAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await CreateDbContextAsync(cancellationToken);
-        var set = dbContext.Set<TEntity>().AsNoTracking();
-        var queryable = query(set.AsQueryable());
-        return await queryable.ExecuteDeleteAsync(cancellationToken);
+        var set = dbContext.Set<TEntity>();
+
+        // 应用传入的查询逻辑（可能包含 Where 和 Take/Skip）
+        var queryable = query(set);
+
+        var entities = await queryable.ToListAsync(cancellationToken);
+
+        if (entities.Count == 0)
+        {
+            return 0;
+        }
+
+        // 使用 RemoveRange 在内存中标记删除，EF Core 会生成标准的 DELETE FROM table WHERE Id IN (...) 语句
+        dbContext.RemoveRange(entities);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return entities.Count;
     }
 
     /// <summary>
