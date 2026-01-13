@@ -75,12 +75,12 @@ services
                     runtime.UseEntityFrameworkCore(ef => ef.UseMySql(mySqlConnectionString));
                 else
                     runtime.UseEntityFrameworkCore(ef => ef.UseSqlite(sqliteConnectionString));
-                
+
                 if (useMassTransit)
                 {
                     runtime.UseMassTransitDispatcher();
                 }
-                
+
                 if (useProtoActor)
                 {
                     runtime.UseProtoActor(proto => proto.PersistenceProvider = _ =>
@@ -96,7 +96,9 @@ services
                 runtime.WorkflowInboxCleanupOptions = options => configuration.GetSection("Runtime:WorkflowInboxCleanup").Bind(options);
                 runtime.WorkflowDispatcherOptions = options => configuration.GetSection("Runtime:WorkflowDispatcher").Bind(options);
             })
-            .UseScheduling()
+            //.UseScheduling()
+            .UseScheduling(scheduling => scheduling.UseQuartzScheduler())
+            .UseQuartz(quartz => quartz.UseMySql(mySqlConnectionString))
             .UseJavaScript(options => options.AllowClrAccess = true)
             .UseLiquid()
             .UseCSharp()
